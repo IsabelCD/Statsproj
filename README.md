@@ -1,5 +1,6 @@
 # Statsproj
-Github para fazer o projeto de estatística
+Github para fazer o projeto de estatística com dados tirados do [kaggle](https://www.kaggle.com/datasets/dylanbollard/covid19-effect-on-grades-constructed-dataset) sobre notas durante o covid
+
 
 ## Metadata:
 This dataset was generated in order to fullfill a requirement for a graduate class in applied econometrics. I originally wanted to collect data on the effect of COVID-19 on student performance from a school district, but was unable to given that our local district was already conducting their own research.
