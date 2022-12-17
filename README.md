@@ -10,9 +10,7 @@ It should be noted that student performance has greatly been diminished as a res
 
 Feel free to reach out about the Stata code. It ended up being about 1500 lines to generate and manipulate, but I'm happy to share it with the same Public Domain license.
 
-# VARIABLES used in the program
-
-## NAME DATATYPE PURPOSE
+## VARIABLES used in the program
 
 ### PERSONAL INFORMATION
 
