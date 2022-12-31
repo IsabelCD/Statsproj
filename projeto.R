@@ -1,7 +1,12 @@
 library(wooldridge)
 library(readxl)
 library(ggplot2)
+library(plm)
+library(reshape2)
+library(lmtest)
+library(car)
 
+setwd("C:/Users/isabe/OneDrive/Desktop/Estatística")
 df=read_excel("./Projeto/covid_grades.xlsx")
 
 ######Pre-processamento######
@@ -55,10 +60,101 @@ ggplot(df, aes(x=school, y=householdincome)) +
   theme_minimal()
 
 
-#feature engineering
+# Feature engineering
 df["gradeSL"]= df$readingscoreSL+df$writingscoreSL+df$mathscoreSL
 df["gradeSL"]
 
+df[]
+
+# Remove using subset
+df <- df[,!names(df) %in% c("readingscoreSL", "writingscoreSL", "mathscoreSL")]
+
+
+####Relationships between variables and target####
+#Plot gradelevel
+ggplot(df, aes(x=gradelevel, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot householdincome
+ggplot(df, aes(x=householdincome, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot numcomputers
+ggplot(df, aes(x=numcomputers, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot familysize
+ggplot(df, aes(x=familysize, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+#Plot familysize
+ggplot(df, aes(x=familysize, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot readingscore
+ggplot(df, aes(x=readingscore, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot writingscore
+ggplot(df, aes(x=writingscore, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
+#Plot mathscore
+ggplot(df, aes(x=mathscore, y= gradeSL)) +
+  geom_point() +
+  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
+  theme_minimal()
+
+
 
 ######Models######
+reg_re= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
+            + freelunch + numcomputers + familysize + fathereduc + mothereduc
+            + readingscore + writingscore + mathscore,
+                 data = df, index = c("studentID","timeperiod"), model="random")
+summary(reg_re)
+
+reg_fe= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
+            + freelunch + numcomputers + familysize + fathereduc + mothereduc
+            + readingscore + writingscore + mathscore,
+            data = df, index = c("studentID","timeperiod"), model="within")
+summary(reg_fe)
+
+#Hausman test
+phtest(reg_fe, reg_re)
+#p-value = 0.0009178 -> rej H0 for 5%
+#FE is inconsistent -> use Random Effects
+
+
+#White special test
+bptest(reg_re, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
+#summary(lm(resid(reg_re)^2 ~ I(fitted(reg_re)) + I(fitted(reg_re)^2)) )
+#p-value<5% -> Rej H0
+#There is statistical evidence that there is heteroskedasticity in the model
+
+#Robust estimates of SE's, and good statistical tests 
+summary(reg_re, vcov = vcovHC)
+
+#RESET test
+reset(reg_re, vcov=hccm)
 
