@@ -5,6 +5,7 @@ library(plm)
 library(reshape2)
 library(lmtest)
 library(car)
+library(fastDummies)
 
 setwd("C:/Users/isabe/OneDrive/Desktop/Estatística")
 df=read_excel("./Projeto/covid_grades.xlsx")
@@ -45,7 +46,7 @@ ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
                        midpoint = 0, limit = c(-1,1), space = "Lab", 
                        name="Pearson\nCorrelation") +
   theme_minimal()+ # minimal theme
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12, hjust = 1))+
   coord_fixed()+
   theme(axis.title.x = element_blank(),
         axis.title.y = element_blank(),
@@ -54,52 +55,23 @@ ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
 # Print the heatmap
 print(ggheatmap)
 
-ggplot(df, aes(x=school, y=householdincome)) +
-  geom_point() +
-  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
-  theme_minimal()
 
 
 # Feature engineering
 df["gradeSL"]= df$readingscoreSL+df$writingscoreSL+df$mathscoreSL
 df["gradeSL"]
 
-df[]
+df <- dummy_cols(df, select_columns = c("timeperiod"), remove_first_dummy=TRUE)
 
 # Remove using subset
 df <- df[,!names(df) %in% c("readingscoreSL", "writingscoreSL", "mathscoreSL")]
 
 
 ####Relationships between variables and target####
-#Plot gradelevel
-ggplot(df, aes(x=gradelevel, y= gradeSL)) +
-  geom_point() +
-  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
-  theme_minimal()
 
 
 #Plot householdincome
 ggplot(df, aes(x=householdincome, y= gradeSL)) +
-  geom_point() +
-  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
-  theme_minimal()
-
-
-#Plot numcomputers
-ggplot(df, aes(x=numcomputers, y= gradeSL)) +
-  geom_point() +
-  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
-  theme_minimal()
-
-
-#Plot familysize
-ggplot(df, aes(x=familysize, y= gradeSL)) +
-  geom_point() +
-  geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
-  theme_minimal()
-
-#Plot familysize
-ggplot(df, aes(x=familysize, y= gradeSL)) +
   geom_point() +
   geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
   theme_minimal()
@@ -130,13 +102,15 @@ ggplot(df, aes(x=mathscore, y= gradeSL)) +
 ######Models######
 reg_re= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
             + freelunch + numcomputers + familysize + fathereduc + mothereduc
-            + readingscore + writingscore + mathscore,
+            + readingscore + writingscore + mathscore + timeperiod_1 +   
+            + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
                  data = df, index = c("studentID","timeperiod"), model="random")
 summary(reg_re)
 
 reg_fe= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
             + freelunch + numcomputers + familysize + fathereduc + mothereduc
-            + readingscore + writingscore + mathscore,
+            + readingscore + writingscore + mathscore + timeperiod_1 +   
+              + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
             data = df, index = c("studentID","timeperiod"), model="within")
 summary(reg_fe)
 
@@ -155,6 +129,71 @@ bptest(reg_re, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
 #Robust estimates of SE's, and good statistical tests 
 summary(reg_re, vcov = vcovHC)
 
-#RESET test
-reset(reg_re, vcov=hccm)
+
+#Estudar a especificação do modelo
+#Teste de RESET
+#Hipótese:
+#H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
+#H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
+aux_reset <- lm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
+                + freelunch + numcomputers + familysize + fathereduc + mothereduc
+                + readingscore + writingscore + mathscore + timeperiod_1 +   
+                  + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
+                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df)
+
+
+#Sob H0:
+# F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
+
+summary(aux_reset)
+
+Fobs=((0.6984-0.67821)/2)/((1-0.6984)/(8400-18-3))
+Fobs
+#Fobs = 280.4576
+qf(0.95,2,8400-18-3)
+#Fcrit= 2.996804
+
+#Conclusion: Como Fobs pertence RR, rej H0. 
+#Logo, EEE de que o modelo está mal especificado
+
+
+#Teste F de significância dos timeperiods
+linearHypothesis(reg_re, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3', 
+                           'timeperiod_4', 'timeperiod_5'))
+#p-value<2.2e-16 -> rej H0. 
+#EEE que timeperiod vars are conjuntamente significativo
+
+
+reg_final= plm(gradeSL ~ school +  gender + covidpos + householdincome
+            + freelunch + numcomputers + fathereduc + mothereduc
+            + readingscore + writingscore + mathscore + timeperiod_1 +   
+              + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
+            data = df, index = c("studentID","timeperiod"), model="random")
+summary(reg_final, vcov = vcovHC)
+
+#Estudar a especificação do modelo
+#Teste de RESET
+#Hipóteses de testes t de cada:
+#H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
+#H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
+aux_reset <- lm(gradeSL ~ school +  gender + covidpos + householdincome
+                + freelunch + numcomputers + fathereduc + mothereduc
+                + readingscore + writingscore + mathscore + timeperiod_1 +   
+                  + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
+                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df)
+
+
+#Sob H0:
+# F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
+
+summary(aux_reset)
+
+Fobs=((0.6983-0.67806)/2)/((1-0.6983)/(8400-16-3))
+Fobs
+#Fobs = 281.126
+qf(0.95,2,8400-16-3)
+#Fcrit= 2.996803
+
+#Conclusion: Como Fobs pertence RR, rej H0. 
+#Logo, EEE de que o modelo está mal especificado
 
