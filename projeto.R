@@ -144,7 +144,7 @@ aux_reset <- lm(gradeSL ~ school + gradelevel + gender + covidpos + householdinc
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-
+linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'))
 summary(aux_reset)
 
 Fobs=((0.6984-0.67821)/2)/((1-0.6984)/(8400-18-3))
@@ -185,7 +185,7 @@ aux_reset <- lm(gradeSL ~ school +  gender + covidpos + householdincome
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-
+linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'))
 summary(aux_reset)
 
 Fobs=((0.6983-0.67806)/2)/((1-0.6983)/(8400-16-3))
