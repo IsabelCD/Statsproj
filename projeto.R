@@ -1,3 +1,4 @@
+####Initial imports####
 library(wooldridge)
 library(readxl)
 library(ggplot2)
@@ -10,8 +11,8 @@ library(fastDummies)
 setwd("C:/Users/isabe/OneDrive/Desktop/Estatística")
 df=read_excel("./Projeto/covid_grades.xlsx")
 
-######Pre-processamento######
-##data exploration##
+######Pre-processing######
+##Data Exploration##
 #check if there are duplicate rows
 sum(duplicated(df))
 
@@ -30,9 +31,13 @@ for (i in colbp){
   title(i)
 }
 
-nrow(df)
-length(df$fathereduc[df$fathereduc>=4])
-length(df$mothereduc[df$mothereduc>=4])
+
+nrow(df) #nº of rows for comparison: 8400
+length(df$fathereduc[df$fathereduc>=4]) 
+#113, but we think they are important
+length(df$mothereduc[df$mothereduc>=4]) 
+#113, but we think they are important
+#we would be removing a category by removing
 
 
 #relationship between variables
@@ -61,6 +66,7 @@ print(ggheatmap)
 df["gradeSL"]= df$readingscoreSL+df$writingscoreSL+df$mathscoreSL
 df["gradeSL"]
 
+#separate timeperiod into categories
 df <- dummy_cols(df, select_columns = c("timeperiod"), remove_first_dummy=TRUE)
 
 # Remove using subset
@@ -99,9 +105,9 @@ ggplot(df, aes(x=mathscore, y= gradeSL)) +
 
 
 
-######Models######
+######PANEL DATA PHASE######
 reg_re= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
-            + freelunch + numcomputers + familysize + fathereduc + mothereduc
+            + freelunch + numcomputers + familysize + fathereduc + mothereduc 
             + readingscore + writingscore + mathscore + timeperiod_1 +   
             + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
                  data = df, index = c("studentID","timeperiod"), model="random")
@@ -117,17 +123,17 @@ summary(reg_fe)
 #Hausman test
 phtest(reg_fe, reg_re)
 #p-value = 0.0009178 -> rej H0 for 5%
-#FE is inconsistent -> use Random Effects
+#RE is inconsistent -> use Fixed Effects
 
 
 #White special test
-bptest(reg_re, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
+bptest(reg_fe, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
 #summary(lm(resid(reg_re)^2 ~ I(fitted(reg_re)) + I(fitted(reg_re)^2)) )
 #p-value<5% -> Rej H0
 #There is statistical evidence that there is heteroskedasticity in the model
 
 #Robust estimates of SE's, and good statistical tests 
-summary(reg_re, vcov = vcovHC)
+summary(reg_fe, vcov = vcovHC)
 
 
 #Estudar a especificação do modelo
@@ -135,65 +141,141 @@ summary(reg_re, vcov = vcovHC)
 #Hipótese:
 #H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
 #H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
-aux_reset <- lm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
-                + freelunch + numcomputers + familysize + fathereduc + mothereduc
-                + readingscore + writingscore + mathscore + timeperiod_1 +   
-                  + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
-                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df)
-
+aux_reset <- plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
+                 + freelunch + numcomputers + familysize + fathereduc + mothereduc
+                 + readingscore + writingscore + mathscore + timeperiod_1 +   
+                   + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
+                 + I(fitted(reg_re)^2), # + I(fitted(reg_re)^3)
+                 data = df, index = c("studentID","timeperiod"), model="within")
+  
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'))
-summary(aux_reset)
-
-Fobs=((0.6984-0.67821)/2)/((1-0.6984)/(8400-18-3))
-Fobs
-#Fobs = 280.4576
-qf(0.95,2,8400-18-3)
-#Fcrit= 2.996804
-
+#linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'), vcov=vcovHC)
+summary(aux_reset, vcov = vcovHC)
 #Conclusion: Como Fobs pertence RR, rej H0. 
 #Logo, EEE de que o modelo está mal especificado
 
 
 #Teste F de significância dos timeperiods
-linearHypothesis(reg_re, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3', 
-                           'timeperiod_4', 'timeperiod_5'))
+linearHypothesis(reg_fe, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3', 
+                           'timeperiod_4', 'timeperiod_5'), vcov=vcovHC)
 #p-value<2.2e-16 -> rej H0. 
 #EEE que timeperiod vars are conjuntamente significativo
 
 
 reg_final= plm(gradeSL ~ school +  gender + covidpos + householdincome
-            + freelunch + numcomputers + fathereduc + mothereduc
+            + freelunch + numcomputers + fathereduc + mothereduc 
+            + I(fathereduc*mothereduc)+ I(readingscore*writingscore)
             + readingscore + writingscore + mathscore + timeperiod_1 +   
               + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
-            data = df, index = c("studentID","timeperiod"), model="random")
+            data = df, index = c("studentID","timeperiod"), model="within")
+
 summary(reg_final, vcov = vcovHC)
+#fathereduc and mothereduc interaction is constant through time, so it is removed
+
+#Teste F de significância dos interaction
+linearHypothesis(reg_final, c('mothereduc ', 'I(fathereduc*mothereduc)'))
+#p-value<2.2e-16 -> rej H0. 
+#EEE que interaction vars are conjuntamente significativo
+
+
 
 #Estudar a especificação do modelo
 #Teste de RESET
 #Hipóteses de testes t de cada:
 #H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
 #H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
-aux_reset <- lm(gradeSL ~ school +  gender + covidpos + householdincome
+aux_reset <- plm(gradeSL ~ school +  gender + covidpos + householdincome
                 + freelunch + numcomputers + fathereduc + mothereduc
+                + I(fathereduc*mothereduc) + I(readingscore*writingscore)
                 + readingscore + writingscore + mathscore + timeperiod_1 +   
                   + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
-                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df)
+                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df, model="within")
 
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'))
-summary(aux_reset)
+linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'), vcov=vcovHC)
+summary(aux_reset, vcov=vcovHC)
 
-Fobs=((0.6983-0.67806)/2)/((1-0.6983)/(8400-16-3))
-Fobs
-#Fobs = 281.126
-qf(0.95,2,8400-16-3)
-#Fcrit= 2.996803
 
 #Conclusion: Como Fobs pertence RR, rej H0. 
 #Logo, EEE de que o modelo está mal especificado
 
+
+
+####CROSS SECTIONAL - PRESENTIAL####
+
+##PRESENTIAL
+df_presential= df[(df["timeperiod_1"]==0 & df["timeperiod_2"]==0 & df["timeperiod_3"]==0 & df["timeperiod_4"]==0 & df["timeperiod_5"]==0),]
+df_presential
+
+reg_presential= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
+     householdincome + freelunch + numcomputers + familysize + 
+     fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_presential)
+
+
+#White special
+bptest(reg_presential, ~ I(fitted(reg_presential)) + I(fitted(reg_presential)^2))
+#p-value>0.05 -> rej H0, so there is statistical evidence of heteroskedasticity in the model
+
+#Robust se
+coeftest(reg_presential, vcov=hccm)
+
+#RESET test
+reset(reg_presential, vcov=hccm)
+#p-value>0.05 -> rej H0, so there is statistical evidence of functional form misspecification
+
+reg_presential1= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
+                      householdincome + freelunch + numcomputers + familysize 
+                    + I(fathereduc*mothereduc) + I(readingscore*writingscore)
+                    + fathereduc + mothereduc + readingscore + writingscore + mathscore
+                    , data= df_presential)
+
+#RESET test
+reset(reg_presential1, vcov=hccm)
+
+
+
+
+####CROSS SECTIONAL - ONLINE####
+df_online= df[df["timeperiod_3"]==1,]
+df_online
+
+
+reg_online= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
+                     householdincome + freelunch + numcomputers + familysize + 
+                     fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_online)
+
+
+#White special
+bptest(reg_online, ~ I(fitted(reg_online)) + I(fitted(reg_online)^2))
+#p-value>0.05 -> rej H0, so there is statistical evidence of heteroskedasticity in the model
+
+#Robust se
+coeftest(reg_online, vcov=hccm)
+
+#RESET test
+reset(reg_online, vcov=hccm)
+#p-value>0.05 -> rej H0, so there is statistical evidence of functional form misspecification
+
+reg_online1= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
+                      householdincome + freelunch + numcomputers + familysize 
+                    + I(fathereduc*mothereduc) + I(readingscore*writingscore)
+                    + fathereduc + mothereduc + readingscore + writingscore + mathscore
+                    , data= df_online)
+
+#RESET test
+reset(reg_online1, vcov=hccm)
+
+
+####TESTE CHOW####
+df_chow= df[(df["timeperiod_1"]==0 & df["timeperiod_2"]==0 & df["timeperiod_3"]==0 & df["timeperiod_4"]==0 & df["timeperiod_5"]==0)
+            | df["timeperiod_3"]==1,]
+
+numerador= (SSRdfchow - SSRonline-SSRpresencial)/(k+1)
+denominador= (SSRonline+SSRpresencial)/(n-2*(k+1))
+FObs= numerador/denominador
+
+pf(Fobs, k+1, n-2*(k+1))
