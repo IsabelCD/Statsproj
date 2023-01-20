@@ -7,6 +7,7 @@ library(reshape2)
 library(lmtest)
 library(car)
 library(fastDummies)
+library(gap)
 
 setwd("C:/Users/isabe/OneDrive/Desktop/Estatística")
 df=read_excel("./Projeto/covid_grades.xlsx")
@@ -75,6 +76,17 @@ df <- df[,!names(df) %in% c("readingscoreSL", "writingscoreSL", "mathscoreSL")]
 
 ####Relationships between variables and target####
 
+#Plot for school
+boxplot( gradeSL ~ school , data= df)
+
+#Plot for gradelevel
+boxplot( gradeSL ~ gradelevel , data= df)
+
+#Plot for gender
+boxplot( gradeSL ~ gender , data= df)
+
+#Plot for covidpos
+boxplot( gradeSL ~ covidpos , data= df)
 
 #Plot householdincome
 ggplot(df, aes(x=householdincome, y= gradeSL)) +
@@ -82,6 +94,20 @@ ggplot(df, aes(x=householdincome, y= gradeSL)) +
   geom_smooth(method='lm',formula = y ~ x , se=FALSE) +
   theme_minimal()
 
+#Plot for freelunch
+boxplot( gradeSL ~ freelunch , data= df)
+
+#Plot for numcomputers
+boxplot( gradeSL ~ numcomputers , data= df)
+
+#Plot for familysize
+boxplot( gradeSL ~ familysize , data= df)
+
+#Plot for fathereduc
+boxplot( gradeSL ~ fathereduc , data= df)
+
+#Plot for mothereduc
+boxplot( gradeSL ~ mothereduc , data= df)
 
 #Plot readingscore
 ggplot(df, aes(x=readingscore, y= gradeSL)) +
@@ -122,7 +148,7 @@ summary(reg_fe)
 
 #Hausman test
 phtest(reg_fe, reg_re)
-#p-value = 0.0009178 -> rej H0 for 5%
+#p-value = 0.0001279 -> rej H0 for 5%
 #RE is inconsistent -> use Fixed Effects
 
 
@@ -136,49 +162,34 @@ bptest(reg_fe, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
 summary(reg_fe, vcov = vcovHC)
 
 
-#Estudar a especificação do modelo
-#Teste de RESET
-#Hipótese:
+#Teste de RESET - Functional Form Specification
 #H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
 #H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
 aux_reset <- plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
                  + freelunch + numcomputers + familysize + fathereduc + mothereduc
                  + readingscore + writingscore + mathscore + timeperiod_1 +   
                    + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
-                 + I(fitted(reg_re)^2), # + I(fitted(reg_re)^3)
+                 + I(fitted(reg_fe)^2) + I(fitted(reg_fe)^3),
                  data = df, index = c("studentID","timeperiod"), model="within")
-  
+
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-#linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'), vcov=vcovHC)
+linearHypothesis(aux_reset, c('I(fitted(reg_fe)^2) ', 'I(fitted(reg_fe)^3)'), vcov=vcovHC)
 summary(aux_reset, vcov = vcovHC)
-#Conclusion: Como Fobs pertence RR, rej H0. 
-#Logo, EEE de que o modelo está mal especificado
+#Conclusion: Since p-value<0.05, we rej H0. 
+#So, there is statistical evidence of functional form misspecification
 
 
-#Teste F de significância dos timeperiods
-linearHypothesis(reg_fe, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3', 
-                           'timeperiod_4', 'timeperiod_5'), vcov=vcovHC)
-#p-value<2.2e-16 -> rej H0. 
-#EEE que timeperiod vars are conjuntamente significativo
 
-
-reg_final= plm(gradeSL ~ school +  gender + covidpos + householdincome
+reg_explore= plm(gradeSL ~ school +  gender + covidpos + householdincome
             + freelunch + numcomputers + fathereduc + mothereduc 
-            + I(fathereduc*mothereduc)+ I(readingscore*writingscore)
+            + I(readingscore*writingscore)
             + readingscore + writingscore + mathscore + timeperiod_1 +   
               + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
             data = df, index = c("studentID","timeperiod"), model="within")
 
-summary(reg_final, vcov = vcovHC)
-#fathereduc and mothereduc interaction is constant through time, so it is removed
-
-#Teste F de significância dos interaction
-linearHypothesis(reg_final, c('mothereduc ', 'I(fathereduc*mothereduc)'))
-#p-value<2.2e-16 -> rej H0. 
-#EEE que interaction vars are conjuntamente significativo
-
+summary(reg_explore, vcov = vcovHC)
 
 
 #Estudar a especificação do modelo
@@ -187,21 +198,38 @@ linearHypothesis(reg_final, c('mothereduc ', 'I(fathereduc*mothereduc)'))
 #H0: I(fitted(gradeSL)^2) = I(fitted(gradeSL)^3) = 0 
 #H1: I(fitted(gradeSL)^2) != 0 ou I(fitted(gradeSL)^3) != 0
 aux_reset <- plm(gradeSL ~ school +  gender + covidpos + householdincome
-                + freelunch + numcomputers + fathereduc + mothereduc
-                + I(fathereduc*mothereduc) + I(readingscore*writingscore)
-                + readingscore + writingscore + mathscore + timeperiod_1 +   
-                  + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
-                + I(fitted(reg_re)^2) + I(fitted(reg_re)^3), data=df, model="within")
+                 + freelunch + numcomputers + fathereduc + mothereduc 
+                 + readingscore +  I(readingscore^2)+ writingscore 
+                 +  I(writingscore^2) + mathscore + I(mathscore^2)+ timeperiod_1 +   
+                   + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5
+                 + I(fitted(reg_fe)^2) + I(fitted(reg_fe)^3),
+                 data = df, index = c("studentID","timeperiod"), model="within")
 
 
 #Sob H0:
 # F = ((Rur-Rr)/2)/((1-Rur)/n-k-3)
-linearHypothesis(aux_reset, c('I(fitted(reg_re)^2) ', 'I(fitted(reg_re)^3)'), vcov=vcovHC)
-summary(aux_reset, vcov=vcovHC)
+linearHypothesis(aux_reset, c('I(fitted(reg_fe)^2) ', 'I(fitted(reg_fe)^3)'), vcov=vcovHC)
+#summary(aux_reset, vcov=vcovHC)
+#the new specification is even worse, as p-value is smaller, 
+#the hypothesis of functional form misspecification is more statistically significant
 
 
-#Conclusion: Como Fobs pertence RR, rej H0. 
-#Logo, EEE de que o modelo está mal especificado
+#Final functional form specification
+#See summary of best model so far
+summary(reg_fe, vcov = vcovHC)
+#Since p-value>0.05 in variable "mothereduc", we don't rej H0, 
+#so there is no statistical evidence of it being important to explain the grades
+
+#Other (singular) have a p-values<0.05, so there is statistical evidence
+#they are important to explain the grades
+
+
+#F test to see joint significance of timeperiods
+linearHypothesis(reg_fe, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3', 
+                           'timeperiod_4', 'timeperiod_5'), vcov=vcovHC)
+#p-value<0.05 -> rej H0. 
+#There is statistical evidence that the timeperiod variables are jointly significant
+ 
 
 
 
@@ -228,15 +256,20 @@ reset(reg_presential, vcov=hccm)
 #p-value>0.05 -> rej H0, so there is statistical evidence of functional form misspecification
 
 reg_presential1= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
-                      householdincome + freelunch + numcomputers + familysize 
-                    + I(fathereduc*mothereduc) + I(readingscore*writingscore)
+                      householdincome + freelunch+ numcomputers+ familysize
+                    + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
                     + fathereduc + mothereduc + readingscore + writingscore + mathscore
                     , data= df_presential)
 
 #RESET test
 reset(reg_presential1, vcov=hccm)
+#Since p-value=1.136e-07, we still reject H0, but the test statistic is less significant
+#so, there is an improvement in the model 
 
-
+summary(reg_presential1, vcov=hccm)
+#gradelevel, numcomputers, familysize were not statistically significant.
+#But they will only be removed from the model if the same decision is made in the online data 
+#(so that the models are comparable)
 
 
 ####CROSS SECTIONAL - ONLINE####
@@ -260,22 +293,65 @@ coeftest(reg_online, vcov=hccm)
 reset(reg_online, vcov=hccm)
 #p-value>0.05 -> rej H0, so there is statistical evidence of functional form misspecification
 
+#Make same changes as with the presential data
 reg_online1= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
-                      householdincome + freelunch + numcomputers + familysize 
-                    + I(fathereduc*mothereduc) + I(readingscore*writingscore)
+                      householdincome + freelunch+ numcomputers+ familysize
+                    + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
                     + fathereduc + mothereduc + readingscore + writingscore + mathscore
                     , data= df_online)
 
+
 #RESET test
 reset(reg_online1, vcov=hccm)
+#Since p-value=1.697e-05, we still reject H0, but the test statistic is less significant
+#so, there is an improvement in the model
 
+summary(reg_online1, vcov=hccm)
+#gradelevel and familysize are not statistically significant for a 5% level in either of the dataset (online or presential)
+#so, we remove them from both models
+#numcomputers is statistically significant in this model, so it won't be removed in either of them
+
+####FINAL CROSS-SECTIONAL MODELS####
+presential= lm(gradeSL ~ school + gender + covidpos + 
+                 householdincome + freelunch+ numcomputers
+               + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+               + fathereduc + mothereduc + readingscore + writingscore + mathscore
+               , data= df_presential)
+
+online= lm(gradeSL ~ school +  gender + covidpos + 
+                  householdincome + freelunch+ numcomputers
+                + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+                + fathereduc + mothereduc + readingscore + writingscore + mathscore
+                , data= df_online)
 
 ####TESTE CHOW####
+#H0: parameters are the same between online and presential time periods
+#H1: parameters are different between online and presential
 df_chow= df[(df["timeperiod_1"]==0 & df["timeperiod_2"]==0 & df["timeperiod_3"]==0 & df["timeperiod_4"]==0 & df["timeperiod_5"]==0)
             | df["timeperiod_3"]==1,]
 
-numerador= (SSRdfchow - SSRonline-SSRpresencial)/(k+1)
-denominador= (SSRonline+SSRpresencial)/(n-2*(k+1))
-FObs= numerador/denominador
+chow= lm(gradeSL ~ school +  gender + covidpos + 
+             householdincome + freelunch+ numcomputers
+           + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+           + fathereduc + mothereduc + readingscore + writingscore + mathscore
+           , data= df_chow)
 
-pf(Fobs, k+1, n-2*(k+1))
+SSRonline= sum((online$fitted.values - mean(online$model$gradeSL))^2)
+SSRpresential=sum((presential$fitted.values - mean(presential$model$gradeSL))^2)
+SSRdfchow=sum((chow$fitted.values - mean(chow$model$gradeSL))^2)
+
+dof=nrow(df_online)+nrow(df_presential)-2*(14+1)
+fnum= (((nrow(df_online)-14)*summary(online)$sigma^2)+ ((nrow(df_presential)-14)*summary(presential)$sigma^2))^2
+fden= ((nrow(df_online)-14)*(summary(online)$sigma^2)^2)+ ((nrow(df_presential)-14)*(summary(presential)$sigma^2)^2)
+f=fnum/fden
+
+Fobsnum= (SSRdfchow - SSRonline-SSRpresential)/(14+1)
+Fobsdenom= (SSRonline+SSRpresential)/f
+
+Fobs= Fobsnum/Fobsdenom
+
+prob=(dof/f)*pf(Fobs, 14+1,dof)
+2*(1-prob)
+#since p-value<0.05, we reject H0. 
+#So there is statistical evidence that the parameters are different for different phases
+
