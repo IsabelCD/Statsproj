@@ -7,9 +7,7 @@ library(reshape2)
 library(lmtest)
 library(car)
 library(fastDummies)
-library(gap)
 
-setwd("C:/Users/isabe/OneDrive/Desktop/Estatística")
 df=read_excel("./Projeto/covid_grades.xlsx")
 
 ######Pre-processing######
@@ -135,8 +133,8 @@ ggplot(df, aes(x=mathscore, y= gradeSL)) +
 reg_re= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
             + freelunch + numcomputers + familysize + fathereduc + mothereduc 
             + readingscore + writingscore + mathscore + timeperiod_1 +   
-            + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
-                 data = df, index = c("studentID","timeperiod"), model="random")
+              + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
+            data = df, index = c("studentID","timeperiod"), model="random")
 summary(reg_re)
 
 reg_fe= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
@@ -153,7 +151,7 @@ phtest(reg_fe, reg_re)
 
 
 #White special test
-bptest(reg_fe, ~ I(fitted(reg_re)) + I(fitted(reg_re)^2))
+bptest(reg_fe, ~ I(fitted(reg_fe)) + I(fitted(reg_fe)^2))
 #summary(lm(resid(reg_re)^2 ~ I(fitted(reg_re)) + I(fitted(reg_re)^2)) )
 #p-value<5% -> Rej H0
 #There is statistical evidence that there is heteroskedasticity in the model
@@ -183,11 +181,11 @@ summary(aux_reset, vcov = vcovHC)
 
 
 reg_explore= plm(gradeSL ~ school +  gender + covidpos + householdincome
-            + freelunch + numcomputers + fathereduc + mothereduc 
-            + I(readingscore*writingscore)
-            + readingscore + writingscore + mathscore + timeperiod_1 +   
-              + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
-            data = df, index = c("studentID","timeperiod"), model="within")
+                 + freelunch + numcomputers + fathereduc + mothereduc 
+                 + I(readingscore*writingscore)
+                 + readingscore + writingscore + mathscore + timeperiod_1 +   
+                   + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
+                 data = df, index = c("studentID","timeperiod"), model="within")
 
 summary(reg_explore, vcov = vcovHC)
 
@@ -220,6 +218,13 @@ summary(reg_fe, vcov = vcovHC)
 #Since p-value>0.05 in variable "mothereduc", we don't rej H0, 
 #so there is no statistical evidence of it being important to explain the grades
 
+reg_fe= plm(gradeSL ~ school + gradelevel + gender + covidpos + householdincome
+            + freelunch + numcomputers + familysize + fathereduc 
+            + readingscore + writingscore + mathscore + timeperiod_1 +   
+              + timeperiod_2 + timeperiod_3 + timeperiod_4 + timeperiod_5,
+            data = df, index = c("studentID","timeperiod"), model="within")
+summary(reg_fe, vcov = vcovHC)
+
 #Other (singular) have a p-values<0.05, so there is statistical evidence
 #they are important to explain the grades
 
@@ -229,7 +234,7 @@ linearHypothesis(reg_fe, c('timeperiod_1 ', 'timeperiod_2', 'timeperiod_3',
                            'timeperiod_4', 'timeperiod_5'), vcov=vcovHC)
 #p-value<0.05 -> rej H0. 
 #There is statistical evidence that the timeperiod variables are jointly significant
- 
+
 
 
 
@@ -240,8 +245,8 @@ df_presential= df[(df["timeperiod_1"]==0 & df["timeperiod_2"]==0 & df["timeperio
 df_presential
 
 reg_presential= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
-     householdincome + freelunch + numcomputers + familysize + 
-     fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_presential)
+                     householdincome + freelunch + numcomputers + familysize + 
+                     fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_presential)
 
 
 #White special
@@ -278,8 +283,8 @@ df_online
 
 
 reg_online= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
-                     householdincome + freelunch + numcomputers + familysize + 
-                     fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_online)
+                 householdincome + freelunch + numcomputers + familysize + 
+                 fathereduc + mothereduc + readingscore + writingscore + mathscore, data= df_online)
 
 
 #White special
@@ -295,10 +300,10 @@ reset(reg_online, vcov=hccm)
 
 #Make same changes as with the presential data
 reg_online1= lm(gradeSL ~ school + gradelevel + gender + covidpos + 
-                      householdincome + freelunch+ numcomputers+ familysize
-                    + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
-                    + fathereduc + mothereduc + readingscore + writingscore + mathscore
-                    , data= df_online)
+                  householdincome + freelunch+ numcomputers+ familysize
+                + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+                + fathereduc + mothereduc + readingscore + writingscore + mathscore
+                , data= df_online)
 
 
 #RESET test
@@ -317,30 +322,33 @@ presential= lm(gradeSL ~ school + gender + covidpos +
                + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
                + fathereduc + mothereduc + readingscore + writingscore + mathscore
                , data= df_presential)
+summary(presential, vcov=hccm)
 
 online= lm(gradeSL ~ school +  gender + covidpos + 
-                  householdincome + freelunch+ numcomputers
-                + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
-                + fathereduc + mothereduc + readingscore + writingscore + mathscore
-                , data= df_online)
+             householdincome + freelunch+ numcomputers
+           + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+           + fathereduc + mothereduc + readingscore + writingscore + mathscore
+           , data= df_online)
+summary(online, vcov=hccm)
 
-####TESTE CHOW####
+####CHOW TEST####
 #H0: parameters are the same between online and presential time periods
 #H1: parameters are different between online and presential
 df_chow= df[(df["timeperiod_1"]==0 & df["timeperiod_2"]==0 & df["timeperiod_3"]==0 & df["timeperiod_4"]==0 & df["timeperiod_5"]==0)
             | df["timeperiod_3"]==1,]
 
 chow= lm(gradeSL ~ school +  gender + covidpos + 
-             householdincome + freelunch+ numcomputers
-           + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
-           + fathereduc + mothereduc + readingscore + writingscore + mathscore
-           , data= df_chow)
+           householdincome + freelunch+ numcomputers
+         + I(mathscore*writingscore) + I(readingscore*writingscore)+ I(readingscore*mathscore)
+         + fathereduc + mothereduc + readingscore + writingscore + mathscore
+         , data= df_chow)
 
 SSRonline= sum((online$fitted.values - mean(online$model$gradeSL))^2)
 SSRpresential=sum((presential$fitted.values - mean(presential$model$gradeSL))^2)
 SSRdfchow=sum((chow$fitted.values - mean(chow$model$gradeSL))^2)
 
 dof=nrow(df_online)+nrow(df_presential)-2*(14+1)
+
 fnum= (((nrow(df_online)-14)*summary(online)$sigma^2)+ ((nrow(df_presential)-14)*summary(presential)$sigma^2))^2
 fden= ((nrow(df_online)-14)*(summary(online)$sigma^2)^2)+ ((nrow(df_presential)-14)*(summary(presential)$sigma^2)^2)
 f=fnum/fden
